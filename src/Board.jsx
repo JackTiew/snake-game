@@ -4,8 +4,8 @@ import Common from "./Common";
 
 import { CellType, SnakeDirection } from './Constants';
 
-const BOARD_X_SIZE = 20;
-const BOARD_Y_SIZE = 20;
+const BOARD_X_SIZE = 30;
+const BOARD_Y_SIZE = 30;
 const DEFAULT_SNAKE_LENGTH = 5;
 
 export default function Board() {
@@ -15,6 +15,8 @@ export default function Board() {
     const [ foodCoordinate, setFoodCoordinate ] =  useState([]);
     const [ snakeDirection, setSnakeDirection ] = useState(SnakeDirection.RIGHT);
     const [ gameStart, setGameStart ] = useState(false);
+    const [ score, setScore ] = useState(0);
+    const [ speed, setSpeed ] = useState(200);
 
     useEffect(() => {
         let board_coordinate = [];
@@ -29,14 +31,39 @@ export default function Board() {
         generateSnake(board_coordinate);
         generateFood(board_coordinate);
         setBoardCoordinate(board_coordinate);
+    }, []);
+
+    useEffect(() => {
+        const keypress = (key) => {
+            if(key.keyCode === 32) { //Space
+                startGame();
+            } else if(gameStart && key.keyCode >= 37 && key.keyCode <= 40) {
+                if(key.keyCode === 37) { //Left
+                    if(snakeDirection !== SnakeDirection.RIGHT) {
+                        setSnakeDirection(SnakeDirection.LEFT);
+                    }
+                } else if(key.keyCode === 38) { //Up
+                    if(snakeDirection !== SnakeDirection.DOWN) {
+                        setSnakeDirection(SnakeDirection.UP);
+                    }
+                } else if (key.keyCode === 39) { //Right
+                    if(snakeDirection !== SnakeDirection.LEFT) {
+                        setSnakeDirection(SnakeDirection.RIGHT);
+                    }
+                } else if (key.keyCode === 40) { //Down
+                    if(snakeDirection !== SnakeDirection.UP) {
+                        setSnakeDirection(SnakeDirection.DOWN);
+                    }
+                }
+            }
+        }
 
         document.addEventListener('keydown', keypress);
 
-        // Don't forget to clean up
         return function cleanup() {
             document.removeEventListener('keydown', keypress);
         }
-    }, []);
+    }, [gameStart, snakeDirection]);
 
     const generateSnake = () => {
         let snakeHeadX = BOARD_X_SIZE/2;
@@ -71,8 +98,7 @@ export default function Board() {
     const moveSnake = () => {
         let newCoordinate = Common().deepCopy(snakeCoordinate);
         let newHeadCoordinate = Common().deepCopy(newCoordinate[0]);
-        newCoordinate.splice(newCoordinate.length-1, 1);
-
+        
         if(snakeDirection === SnakeDirection.LEFT) {
             newHeadCoordinate[1] -= 1;
         } else if(snakeDirection === SnakeDirection.UP) {
@@ -83,18 +109,49 @@ export default function Board() {
             newHeadCoordinate[0] += 1;
         }
 
-        newCoordinate.splice(0, 0, newHeadCoordinate);
-        setSnakeCoordinate(newCoordinate);
+        if(isOutOfBoard(newHeadCoordinate) || selfEaten(newHeadCoordinate)) {
+            stopGame();
+        } else {
+            //If eat food
+            if(JSON.stringify(foodCoordinate) === JSON.stringify(newHeadCoordinate)) {
+                setScore(score => score + 1);
+                generateFood();
+                console.log(score);
+                if((score + 1) % 10 === 0) {
+                    setSpeed(speed => Math.floor(speed * 0.8));
+                }
+            } else {
+                newCoordinate.splice(newCoordinate.length-1, 1);
+            }
+            newCoordinate.splice(0, 0, newHeadCoordinate);
+            setSnakeCoordinate(newCoordinate);
+        }
+
     }
 
     useInterval(() => {
         if(gameStart) {
             moveSnake();
         }
-    }, 1000)
+    }, speed);
 
     const startGame = () => {
         setGameStart(true);
+    }
+
+    const stopGame = () => {
+        setGameStart(false);
+    }
+
+    const isOutOfBoard = (newHeadCoordinate) => {
+        return (newHeadCoordinate[0] < 0
+        || newHeadCoordinate[1] < 0
+        || newHeadCoordinate[0] >= BOARD_X_SIZE
+        ||newHeadCoordinate[1] >= BOARD_Y_SIZE);
+    }
+
+    const selfEaten = (newHeadCoordinate) => {
+        return snakeCoordinate.find(snake => JSON.stringify(snake) === JSON.stringify(newHeadCoordinate)) !== undefined;
     }
 
     const getCellColor = (x, y) => {
@@ -123,27 +180,16 @@ export default function Board() {
         }
     }
 
-    const keypress = (key) => {
-        if(key.keyCode === 37) { //Left
-            console.log("LEFT!");
-            setSnakeDirection(SnakeDirection.LEFT);
-        } else if(key.keyCode === 38) { //Up
-            console.log("UP!");
-            setSnakeDirection(SnakeDirection.UP);
-        } else if (key.keyCode === 39) { //Right
-            console.log("RIGHT!");
-            setSnakeDirection(SnakeDirection.RIGHT);
-        } else if (key.keyCode === 40) { //Down
-            console.log("DOWN!");
-            setSnakeDirection(SnakeDirection.DOWN);
-        }
-    }
-
     return (
-        <>
+        <div style={{ width: 'fit-content', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between'}}>
+                <div>Score: {score}</div>
+                {gameStart ? '' : (score === 0 ? 'Press space to start' : 'Game Over')}
+                <div>Current Speed: {speed}</div>
+            </div>
             {
                 boardCoordinate.map((row, x) => (
-                    <div style={{ display: 'flex' }}>
+                    <div style={{ display: 'flex', width: 'fit-content' }}>
                         {
                             row.map((col, y) => (
                                 <div style={{ backgroundColor: getCellColor(x, y), height: '30px', width: '30px' }} />
@@ -152,7 +198,6 @@ export default function Board() {
                     </div>
                 ))
             }
-            <button onClick={startGame}>Start</button>
-        </>
+        </div>
     );
 }
