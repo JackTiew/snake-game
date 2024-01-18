@@ -7,6 +7,7 @@ import { CellType, SnakeDirection } from './Constants';
 const BOARD_X_SIZE = 30;
 const BOARD_Y_SIZE = 30;
 const DEFAULT_SNAKE_LENGTH = 5;
+const FOOD_COUNT = 5;
 
 export default function Board() {
 
@@ -17,8 +18,15 @@ export default function Board() {
     const [ gameStart, setGameStart ] = useState(false);
     const [ score, setScore ] = useState(0);
     const [ speed, setSpeed ] = useState(200);
+    const [ isNewInterval, setIsNewInterval ] = useState(true);
+    const [ cellSize, setCellSize ] = useState(0);
 
     useEffect(() => {
+        const onResize = () => {
+            let axis = window.innerHeight < window.innerWidth ? window.innerHeight : window.innerWidth;
+            setCellSize(Math.floor(axis / 32));
+        }
+
         let board_coordinate = [];
 
         for(let x = 0; x < BOARD_X_SIZE; x++) {
@@ -27,17 +35,25 @@ export default function Board() {
                 board_coordinate[x][y] = CellType.empty;
             }
         }
-
+        
         generateSnake(board_coordinate);
-        generateFood(board_coordinate);
         setBoardCoordinate(board_coordinate);
+        onResize();
+
+        window.addEventListener('resize', onResize);
+
+        return function cleanup() {
+            document.removeEventListener('resize', onResize);
+        }
+
     }, []);
 
     useEffect(() => {
         const keypress = (key) => {
             if(key.keyCode === 32) { //Space
                 startGame();
-            } else if(gameStart && key.keyCode >= 37 && key.keyCode <= 40) {
+            } else if(gameStart && isNewInterval && key.keyCode >= 37 && key.keyCode <= 40) {
+                setIsNewInterval(false);
                 if(key.keyCode === 37) { //Left
                     if(snakeDirection !== SnakeDirection.RIGHT) {
                         setSnakeDirection(SnakeDirection.LEFT);
@@ -63,7 +79,13 @@ export default function Board() {
         return function cleanup() {
             document.removeEventListener('keydown', keypress);
         }
-    }, [gameStart, snakeDirection]);
+    }, [gameStart, snakeDirection, isNewInterval]);
+
+    useEffect(() => {
+        if(foodCoordinate.length < FOOD_COUNT) {
+            generateFood();
+        }
+    }, [foodCoordinate]);
 
     const generateSnake = () => {
         let snakeHeadX = BOARD_X_SIZE/2;
@@ -82,13 +104,13 @@ export default function Board() {
     const generateFood = () => {
         let foodX = 0;
         let foodY = 0;
-
+    
         do {
             foodX = getRandomCell(BOARD_X_SIZE);
             foodY = getRandomCell(BOARD_Y_SIZE);
         } while(snakeCoordinate.find(snake => JSON.stringify(snake) === JSON.stringify([foodX, foodY])));
         
-        setFoodCoordinate([foodX, foodY]);
+        setFoodCoordinate([...foodCoordinate, [foodX, foodY]]);
     }
 
     const getRandomCell = (size) => {
@@ -113,10 +135,10 @@ export default function Board() {
             stopGame();
         } else {
             //If eat food
-            if(JSON.stringify(foodCoordinate) === JSON.stringify(newHeadCoordinate)) {
+            if(foodCoordinate.find(food => JSON.stringify(food) === JSON.stringify(newHeadCoordinate))) {
                 setScore(score => score + 1);
-                generateFood();
-                console.log(score);
+                setFoodCoordinate(foodCoordinate.filter(food => JSON.stringify(food) !== JSON.stringify(newHeadCoordinate)));
+
                 if((score + 1) % 10 === 0) {
                     setSpeed(speed => Math.floor(speed * 0.8));
                 }
@@ -126,12 +148,12 @@ export default function Board() {
             newCoordinate.splice(0, 0, newHeadCoordinate);
             setSnakeCoordinate(newCoordinate);
         }
-
     }
 
     useInterval(() => {
         if(gameStart) {
             moveSnake();
+            setIsNewInterval(true);
         }
     }, speed);
 
@@ -151,6 +173,15 @@ export default function Board() {
     }
 
     const selfEaten = (newHeadCoordinate) => {
+        ///
+        let newCoordinate = snakeCoordinate.find(snake => JSON.stringify(snake) === JSON.stringify(newHeadCoordinate));
+        if(newCoordinate !== undefined) {
+            console.log(newCoordinate);
+            console.log(snakeDirection);
+            console.log(snakeCoordinate);
+        }
+        ///
+
         return snakeCoordinate.find(snake => JSON.stringify(snake) === JSON.stringify(newHeadCoordinate)) !== undefined;
     }
 
@@ -158,7 +189,7 @@ export default function Board() {
         let cellType = CellType.empty;
         
         //For food
-        if(JSON.stringify([x, y]) === JSON.stringify(foodCoordinate)) {
+        if(foodCoordinate.find(food => JSON.stringify(food) === JSON.stringify([x, y]))) {
             cellType = CellType.food;
         }
 
@@ -192,7 +223,7 @@ export default function Board() {
                     <div style={{ display: 'flex', width: 'fit-content' }}>
                         {
                             row.map((col, y) => (
-                                <div style={{ backgroundColor: getCellColor(x, y), height: '30px', width: '30px' }} />
+                                <div style={{ backgroundColor: getCellColor(x, y), height: cellSize + 'px', width: cellSize + 'px' }} />
                             ))
                         }
                     </div>
